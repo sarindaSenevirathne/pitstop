@@ -1,0 +1,737 @@
+# Copyright (c) 2026 WSO2 LLC. (https://www.wso2.com).
+# WSO2 LLC. licenses this file to you under the Apache License,
+# Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+openapi: 3.0.3
+info:
+  title: Products, topics, journeys and the Library listing
+  version: 0.1.0
+  description: |
+    Endpoints the Library and the sales journeys read, and the ones Sales Enablement's
+    editors write. Tables: resources/database/migrations/001_products_topics_journeys.sql.
+
+    **Who may call what.** Every caller is an employee (the gateway passes their token in
+    `x-jwt-assertion`, as for every other endpoint). Reads are open to every employee;
+    drafts are returned only to Sales Admins. Every write needs Sales Admin and returns
+    403 otherwise.
+
+    **Codes.** Products, topics and stages are addressed by their permanent `code` /
+    `stageKey` (lowercase letters, digits and dashes, starting with a letter), so web
+    addresses stay readable and don't change when a name does.
+
+    **Errors** use the body every other endpoint uses: `{ "message": "..." }`.
+
+    **Item names.** An item's name is `content.description`, as everywhere else.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: http://localhost:9090
+    description: Local backend (one-wso2 reaches it through its /pitstop-backend dev proxy)
+security:
+  - gatewayJwt: []
+
+tags:
+  - name: Products
+    description: The products the Library and the journeys are organised by
+  - name: Topics
+    description: Library areas that are not one product, such as pricing or competition
+  - name: Journeys
+    description: Each product's sales journey, its stages and the items placed in them
+  - name: Library
+    description: Listing Library items, and setting an item's product and topic
+
+paths:
+  /products:
+    get:
+      tags: [Products]
+      summary: List products in display order
+      description: Published products for everyone; Sales Admins also get drafts.
+      operationId: listProducts
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Products]
+      summary: Create a product (Sales Admin)
+      description: |
+        Creates the product as a draft unless `status` says otherwise, and gives it the
+        journey stages from the template. Doesn't create any Library page.
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /products/order:
+    put:
+      tags: [Products]
+      summary: Set the display order of products (Sales Admin)
+      operationId: orderProducts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CodeOrder" }
+      responses:
+        "204": { description: Saved }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /products/{code}:
+    parameters:
+      - $ref: "#/components/parameters/ProductCode"
+    get:
+      tags: [Products]
+      summary: Get one product
+      operationId: getProduct
+      responses:
+        "200":
+          description: The product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    patch:
+      tags: [Products]
+      summary: Change a product (Sales Admin)
+      description: Fields left out are unchanged. `code` can't be changed.
+      operationId: updateProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductUpdate" }
+      responses:
+        "200":
+          description: The product as saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    delete:
+      tags: [Products]
+      summary: Remove a product (Sales Admin)
+      description: |
+        Soft delete. Its items stay in the Library and in search; they just no longer
+        have this product. Its journey is no longer shown.
+      operationId: deleteProduct
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /topics:
+    get:
+      tags: [Topics]
+      summary: List topics in display order
+      description: Published topics for everyone; Sales Admins also get drafts.
+      operationId: listTopics
+      responses:
+        "200":
+          description: Topics
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Topic" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Topics]
+      summary: Create a topic (Sales Admin)
+      operationId: createTopic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TopicCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Topic" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /topics/order:
+    put:
+      tags: [Topics]
+      summary: Set the display order of topics (Sales Admin)
+      operationId: orderTopics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CodeOrder" }
+      responses:
+        "204": { description: Saved }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /topics/{code}:
+    parameters:
+      - $ref: "#/components/parameters/TopicCode"
+    patch:
+      tags: [Topics]
+      summary: Change a topic (Sales Admin)
+      operationId: updateTopic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TopicUpdate" }
+      responses:
+        "200":
+          description: The topic as saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Topic" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    delete:
+      tags: [Topics]
+      summary: Remove a topic (Sales Admin)
+      description: Soft delete. Its items stay in the Library and in search.
+      operationId: deleteTopic
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /products/{code}/journey:
+    parameters:
+      - $ref: "#/components/parameters/ProductCode"
+    get:
+      tags: [Journeys]
+      summary: A product's journey, every stage with its items
+      description: |
+        Stages in order, each with its items in order. Items that were deleted or hidden
+        in the Library are left out. A draft product's journey is returned only to Sales
+        Admins (404 for everyone else).
+      operationId: getJourney
+      responses:
+        "200":
+          description: The journey
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Journey" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /products/{code}/journey/stages:
+    parameters:
+      - $ref: "#/components/parameters/ProductCode"
+    post:
+      tags: [Journeys]
+      summary: Add a stage to a product's journey (Sales Admin)
+      description: Added at the end unless `stageOrder` is given.
+      operationId: addStage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StageCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /products/{code}/journey/stages/order:
+    parameters:
+      - $ref: "#/components/parameters/ProductCode"
+    put:
+      tags: [Journeys]
+      summary: Set the order of a journey's stages (Sales Admin)
+      description: "`keys` must list every stage of the journey exactly once."
+      operationId: orderStages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keys]
+              properties:
+                keys:
+                  type: array
+                  items: { type: string }
+      responses:
+        "204": { description: Saved }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /products/{code}/journey/stages/{stageKey}:
+    parameters:
+      - $ref: "#/components/parameters/ProductCode"
+      - $ref: "#/components/parameters/StageKey"
+    patch:
+      tags: [Journeys]
+      summary: Change a stage's text and settings (Sales Admin)
+      description: |
+        Fields left out are unchanged. `stageKey` can't be changed. Sending
+        `markReviewed: true` records the caller and the time as its last review; an
+        ordinary edit doesn't.
+      operationId: updateStage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StageUpdate" }
+      responses:
+        "200":
+          description: The stage as saved, with its items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    delete:
+      tags: [Journeys]
+      summary: Remove a stage from a product's journey (Sales Admin)
+      description: Removes the stage and its item placements. The items stay in the Library.
+      operationId: deleteStage
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /products/{code}/journey/stages/{stageKey}/items:
+    parameters:
+      - $ref: "#/components/parameters/ProductCode"
+      - $ref: "#/components/parameters/StageKey"
+    put:
+      tags: [Journeys]
+      summary: Replace a stage's items, in order (Sales Admin)
+      description: |
+        The Journey content editor saves a stage's whole list at once: the list sent
+        becomes the stage's items, in that order. An item may appear once per stage.
+        Every `contentId` must be a live Library item.
+      operationId: setStageItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 100
+                  items: { $ref: "#/components/schemas/StageItemInput" }
+      responses:
+        "200":
+          description: The stage as saved, with its items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /library/contents:
+    get:
+      tags: [Library]
+      summary: Library items, filtered, sorted and paged, with totals
+      description: |
+        Shared by the Library pages and the Journey content editor's item picker.
+        Filters combine with AND. Deleted and hidden items are never returned.
+      operationId: listLibraryContents
+      parameters:
+        - { name: product, in: query, schema: { type: string }, description: Product code }
+        - { name: topic, in: query, schema: { type: string }, description: Topic code }
+        - name: type
+          in: query
+          description: One or more content types
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/ContentType" }
+          style: form
+          explode: false
+        - { name: stage, in: query, schema: { type: string }, description: "Stage key; needs product. Items placed in that stage of that product" }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: Words in the item's name or note }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [new, name, popular], default: new }
+          description: "new: most recently added or updated first. popular: most viewed in the last 30 days first"
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 24 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: A page of items with totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /contents/{contentId}:
+    patch:
+      tags: [Library]
+      summary: "Existing endpoint, extended: set an item's product and topic (Sales Admin)"
+      description: |
+        The existing PATCH /contents/{contentId} also accepts `productId` and `topicId`.
+        Send a code's id to set it, or null to clear it; leave the field out to keep it.
+        Only these two fields are listed here; the others are unchanged.
+      operationId: updateContentProductTopic
+      parameters:
+        - { name: contentId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productId: { type: integer, nullable: true }
+                topicId: { type: integer, nullable: true }
+      responses:
+        "200": { description: Saved }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+components:
+  securitySchemes:
+    gatewayJwt:
+      type: apiKey
+      in: header
+      name: x-jwt-assertion
+      description: The caller's token, which the API gateway passes on (the dev proxy does the same locally)
+
+  parameters:
+    ProductCode:
+      name: code
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Code" }
+    TopicCode:
+      name: code
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Code" }
+    StageKey:
+      name: stageKey
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Code" }
+
+  responses:
+    BadRequest:
+      description: The request is invalid; the message says why
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: The caller isn't a Sales Admin
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such product, topic or stage (or it's a draft and the caller isn't a Sales Admin)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: The code or stage key is already used
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServerError:
+      description: Something failed on the server
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+    Code:
+      type: string
+      pattern: "^[a-z][a-z0-9-]{1,39}$"
+      example: apim
+
+    Scene:
+      type: string
+      enum: [sunset, formation, radar, deck, hud, climb, launch, break]
+
+    Status:
+      type: string
+      enum: [DRAFT, PUBLISHED]
+
+    ContentType:
+      type: string
+      enum: [slides, youtube, page, gsheet, lms, salesforce, external, route_content]
+
+    CodeOrder:
+      type: object
+      required: [codes]
+      description: Every code, in the new order, each exactly once
+      properties:
+        codes:
+          type: array
+          items: { $ref: "#/components/schemas/Code" }
+
+    Product:
+      type: object
+      required: [id, code, name, scene, displayOrder, status, itemCount, stageCount]
+      properties:
+        id: { type: integer }
+        code: { $ref: "#/components/schemas/Code" }
+        name: { type: string, example: API Manager }
+        shortName: { type: string, nullable: true, example: APIM }
+        description: { type: string, nullable: true }
+        scene: { $ref: "#/components/schemas/Scene" }
+        accent: { type: string, nullable: true }
+        displayOrder: { type: integer }
+        status: { $ref: "#/components/schemas/Status" }
+        itemCount: { type: integer, description: Live Library items with this product }
+        stageCount: { type: integer, description: Stages in its journey }
+        updatedOn: { type: string, format: date-time, nullable: true }
+
+    ProductCreate:
+      type: object
+      required: [code, name]
+      properties:
+        code: { $ref: "#/components/schemas/Code" }
+        name: { type: string, maxLength: 100 }
+        shortName: { type: string, maxLength: 30 }
+        description: { type: string, maxLength: 2000 }
+        scene: { $ref: "#/components/schemas/Scene" }
+        accent: { type: string, maxLength: 20 }
+        status: { $ref: "#/components/schemas/Status" }
+
+    ProductUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 100 }
+        shortName: { type: string, maxLength: 30, nullable: true }
+        description: { type: string, maxLength: 2000, nullable: true }
+        scene: { $ref: "#/components/schemas/Scene" }
+        accent: { type: string, maxLength: 20, nullable: true }
+        status: { $ref: "#/components/schemas/Status" }
+
+    Topic:
+      type: object
+      required: [id, code, name, scene, displayOrder, status, itemCount]
+      properties:
+        id: { type: integer }
+        code: { $ref: "#/components/schemas/Code" }
+        name: { type: string, example: Pricing }
+        description: { type: string, nullable: true }
+        scene: { $ref: "#/components/schemas/Scene" }
+        accent: { type: string, nullable: true }
+        displayOrder: { type: integer }
+        status: { $ref: "#/components/schemas/Status" }
+        itemCount: { type: integer }
+        updatedOn: { type: string, format: date-time, nullable: true }
+
+    TopicCreate:
+      type: object
+      required: [code, name]
+      properties:
+        code: { $ref: "#/components/schemas/Code" }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 2000 }
+        scene: { $ref: "#/components/schemas/Scene" }
+        accent: { type: string, maxLength: 20 }
+        status: { $ref: "#/components/schemas/Status" }
+
+    TopicUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 100 }
+        description: { type: string, maxLength: 2000, nullable: true }
+        scene: { $ref: "#/components/schemas/Scene" }
+        accent: { type: string, maxLength: 20, nullable: true }
+        status: { $ref: "#/components/schemas/Status" }
+
+    Journey:
+      type: object
+      required: [product, stages]
+      properties:
+        product: { $ref: "#/components/schemas/Product" }
+        stages:
+          type: array
+          items: { $ref: "#/components/schemas/Stage" }
+
+    Stage:
+      type: object
+      required: [key, number, title, order, internalOnly, items]
+      properties:
+        key: { $ref: "#/components/schemas/Code" }
+        number: { type: string, example: "1.1" }
+        title: { type: string, example: Product / Platform }
+        question: { type: string, nullable: true, description: "The question this stage answers, shown in its hero" }
+        summary: { type: string, nullable: true }
+        details: { $ref: "#/components/schemas/StageDetails" }
+        order: { type: integer }
+        internalOnly: { type: boolean }
+        ownerEmail: { type: string, nullable: true }
+        lastReviewedBy: { type: string, nullable: true }
+        lastReviewedOn: { type: string, format: date-time, nullable: true }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StageItem" }
+
+    StageDetails:
+      type: object
+      description: |
+        The stage's written guidance. Every list is optional; the editor shows only the
+        lists a stage uses. New lists can be added here later without a migration.
+      properties:
+        questionsToAsk:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 300 }
+        valuePoints:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [title]
+            properties:
+              title: { type: string, maxLength: 120 }
+              text: { type: string, maxLength: 600 }
+        stories:
+          type: array
+          maxItems: 12
+          items:
+            type: object
+            required: [customer]
+            properties:
+              customer: { type: string, maxLength: 120 }
+              industry: { type: string, maxLength: 60 }
+              region: { type: string, maxLength: 60 }
+              outcome: { type: string, maxLength: 300 }
+              contentId: { type: integer, nullable: true, description: The Library item that tells the story }
+
+    StageCreate:
+      type: object
+      required: [key, number, title]
+      properties:
+        key: { $ref: "#/components/schemas/Code" }
+        number: { type: string, maxLength: 10 }
+        title: { type: string, maxLength: 100 }
+        stageOrder: { type: integer }
+        internalOnly: { type: boolean, default: false }
+
+    StageUpdate:
+      type: object
+      properties:
+        number: { type: string, maxLength: 10 }
+        title: { type: string, maxLength: 100 }
+        question: { type: string, maxLength: 300, nullable: true }
+        summary: { type: string, maxLength: 4000, nullable: true }
+        details: { $ref: "#/components/schemas/StageDetails" }
+        internalOnly: { type: boolean }
+        ownerEmail: { type: string, format: email, nullable: true }
+        markReviewed: { type: boolean }
+
+    StageItemInput:
+      type: object
+      required: [contentId]
+      properties:
+        contentId: { type: integer }
+        note: { type: string, maxLength: 300, nullable: true }
+        isSlide: { type: boolean, default: false }
+
+    StageItem:
+      type: object
+      required: [order, isSlide, item]
+      properties:
+        order: { type: integer }
+        note: { type: string, nullable: true }
+        isSlide: { type: boolean }
+        item: { $ref: "#/components/schemas/LibraryItem" }
+
+    LibraryItem:
+      type: object
+      description: One Library item, in the shape the Library cards, item panel and journey use
+      required: [contentId, name, contentType, contentLink, createdOn]
+      properties:
+        contentId: { type: integer }
+        name: { type: string, description: "content.description" }
+        contentType: { $ref: "#/components/schemas/ContentType" }
+        contentSubtype: { type: string, nullable: true }
+        contentLink: { type: string }
+        thumbnail: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        productCode: { type: string, nullable: true }
+        topicCode: { type: string, nullable: true }
+        likesCount: { type: integer }
+        commentCount: { type: integer }
+        viewCount30d: { type: integer, description: "Views in the last 30 days, from the activity log" }
+        createdOn: { type: string, format: date-time }
+        updatedOn: { type: string, format: date-time, nullable: true }
+        lastVerifiedOn: { type: string, format: date-time, nullable: true }
+
+    LibraryPage:
+      type: object
+      required: [total, newCount, items]
+      properties:
+        total: { type: integer, description: "Items matching the filters, across all pages" }
+        newCount: { type: integer, description: "Of those, added or updated in the last 14 days" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryItem" }
