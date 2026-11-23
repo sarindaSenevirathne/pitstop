@@ -4283,4 +4283,102 @@ service http:InterceptableService / on new http:Listener(9090) {
             body: { status: "SUCCESS", reason: "URL is healthy and safe to embed" }
         };
     }
+
+    # List products in display order. Sales Admins also get drafts.
+    #
+    # + ctx - Request context
+    # + return - Products, or an Internal Server Error
+    resource function get products(http:RequestContext ctx) returns types:Product[]|http:InternalServerError {
+        boolean|error isAdmin = authorization:isSalesAdmin(ctx);
+        if isAdmin is error {
+            log:printError(constants:GET_USER_ROLE_ERROR, isAdmin);
+            return <http:InternalServerError>{body: {message: constants:GET_USER_ROLE_ERROR}};
+        }
+
+        types:Product[]|error products = database:getProducts(!isAdmin);
+        if products is error {
+            string customError = "Error while fetching products";
+            log:printError(customError, products);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        return products;
+    }
+
+    # Get one product by its code. A draft is visible only to Sales Admins.
+    #
+    # + code - Product code
+    # + ctx - Request context
+    # + return - The product, Not Found, or an Internal Server Error
+    resource function get products/[string code](http:RequestContext ctx)
+            returns types:Product|http:NotFound|http:InternalServerError {
+        if !types:isValidCode(code) {
+            return <http:NotFound>{body: {message: "Product not found"}};
+        }
+        boolean|error isAdmin = authorization:isSalesAdmin(ctx);
+        if isAdmin is error {
+            log:printError(constants:GET_USER_ROLE_ERROR, isAdmin);
+            return <http:InternalServerError>{body: {message: constants:GET_USER_ROLE_ERROR}};
+        }
+
+        types:Product|error? product = database:getProductByCode(code, !isAdmin);
+        if product is error {
+            string customError = "Error while fetching the product";
+            log:printError(customError, product, code = code);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        if product is () {
+            return <http:NotFound>{body: {message: "Product not found"}};
+        }
+        return product;
+    }
+
+    # List topics in display order. Sales Admins also get drafts.
+    #
+    # + ctx - Request context
+    # + return - Topics, or an Internal Server Error
+    resource function get topics(http:RequestContext ctx) returns types:Topic[]|http:InternalServerError {
+        boolean|error isAdmin = authorization:isSalesAdmin(ctx);
+        if isAdmin is error {
+            log:printError(constants:GET_USER_ROLE_ERROR, isAdmin);
+            return <http:InternalServerError>{body: {message: constants:GET_USER_ROLE_ERROR}};
+        }
+
+        types:Topic[]|error topics = database:getTopics(!isAdmin);
+        if topics is error {
+            string customError = "Error while fetching topics";
+            log:printError(customError, topics);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        return topics;
+    }
+
+    # Get a product's sales journey: every stage in order, each with its items in order.
+    # Deleted items are left out, and so are hidden ones unless the caller is a Sales Admin.
+    # A draft product's journey is visible only to Sales Admins.
+    #
+    # + code - Product code
+    # + ctx - Request context
+    # + return - The journey, Not Found, or an Internal Server Error
+    resource function get products/[string code]/journey(http:RequestContext ctx)
+            returns types:Journey|http:NotFound|http:InternalServerError {
+        if !types:isValidCode(code) {
+            return <http:NotFound>{body: {message: "Product not found"}};
+        }
+        boolean|error isAdmin = authorization:isSalesAdmin(ctx);
+        if isAdmin is error {
+            log:printError(constants:GET_USER_ROLE_ERROR, isAdmin);
+            return <http:InternalServerError>{body: {message: constants:GET_USER_ROLE_ERROR}};
+        }
+
+        types:Journey|error? journey = database:getJourney(code, !isAdmin);
+        if journey is error {
+            string customError = "Error while fetching the journey";
+            log:printError(customError, journey, code = code);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        if journey is () {
+            return <http:NotFound>{body: {message: "Product not found"}};
+        }
+        return journey;
+    }
 }

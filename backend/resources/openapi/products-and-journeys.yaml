@@ -31,6 +31,9 @@ info:
     **Errors** use the body every other endpoint uses: `{ "message": "..." }`.
 
     **Item names.** An item's name is `content.description`, as everywhere else.
+
+    **Times** are returned as the other endpoints return them: the database's timestamp
+    text, such as `2024-07-01 20:37:38.155592`, in the database's time zone.
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0
@@ -544,7 +547,7 @@ components:
         status: { $ref: "#/components/schemas/Status" }
         itemCount: { type: integer, description: Live Library items with this product }
         stageCount: { type: integer, description: Stages in its journey }
-        updatedOn: { type: string, format: date-time, nullable: true }
+        updatedOn: { type: string, nullable: true }
 
     ProductCreate:
       type: object
@@ -581,7 +584,7 @@ components:
         displayOrder: { type: integer }
         status: { $ref: "#/components/schemas/Status" }
         itemCount: { type: integer }
-        updatedOn: { type: string, format: date-time, nullable: true }
+        updatedOn: { type: string, nullable: true }
 
     TopicCreate:
       type: object
@@ -626,7 +629,7 @@ components:
         internalOnly: { type: boolean }
         ownerEmail: { type: string, nullable: true }
         lastReviewedBy: { type: string, nullable: true }
-        lastReviewedOn: { type: string, format: date-time, nullable: true }
+        lastReviewedOn: { type: string, nullable: true }
         items:
           type: array
           items: { $ref: "#/components/schemas/StageItem" }
@@ -722,9 +725,9 @@ components:
         likesCount: { type: integer }
         commentCount: { type: integer }
         viewCount30d: { type: integer, description: "Views in the last 30 days, from the activity log" }
-        createdOn: { type: string, format: date-time }
-        updatedOn: { type: string, format: date-time, nullable: true }
-        lastVerifiedOn: { type: string, format: date-time, nullable: true }
+        createdOn: { type: string }
+        updatedOn: { type: string, nullable: true }
+        lastVerifiedOn: { type: string, nullable: true }
 
     LibraryPage:
       type: object

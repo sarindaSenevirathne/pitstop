@@ -51,6 +51,15 @@ public isolated function checkAdminAccess(http:RequestContext ctx) returns http:
     return ();
 }
 
+# Whether the requesting user is a Sales Admin.
+#
+# + ctx - Request context
+# + return - True for a Sales Admin, false for anyone else, or an error if the caller's groups can't be read
+public isolated function isSalesAdmin(http:RequestContext ctx) returns boolean|error {
+    string[] userGroups = check ctx.getWithType(REQUESTED_BY_USER_ROLES);
+    return hasPermission([authorizedRoles.adminRole], userGroups);
+}
+
 # Check if the requesting user can view the analytics dashboard (admins and analytics viewers).
 #
 # + ctx - Request context
